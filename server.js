@@ -2,10 +2,11 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 app.use(express.urlencoded({extended: true})) 
-
 const MongoClient = require('mongodb').MongoClient;
 // ejs engine을 쓰겠다고 선언
 app.set('view engine', 'ejs');
+// 나는 static 파일을 보관하기 위해 public 폴더를 쓸거다.
+app.use('/public', express.static('public'));
 
 var db;
 //몽고db로 연결
@@ -22,9 +23,9 @@ MongoClient.connect('mongodb+srv://rlaghdtlr012:1q2w3e4r5t!@cluster0.ci2ii.mongo
     db = client.db('hongshikDB');
 
     //post라는 파일에 insertOne{자료}를 저장
-    db.collection('post').insertOne({이름 : 'Kim', 나이 : 28, _id : 100}, function(error, result){
-        console.log('저장완료');
-    });
+    // db.collection('post').insertOne({이름 : 'Kim', 나이 : 28, _id : 100}, function(error, result){
+    //     console.log('저장완료');
+    // });
 
     //어떤 사람이 /add 경로로 POST 요청을 하면 데이터 2(제목, 날짜)개를 보내주는데,
     // 이 때, 'post'라는 이름을 가진 collection에 두 개 데이터를 저장하기.
@@ -48,7 +49,11 @@ MongoClient.connect('mongodb+srv://rlaghdtlr012:1q2w3e4r5t!@cluster0.ci2ii.mongo
 
 //메인페이지로 접속하면 main.html 보여줌
 app.get('/', function(req, res){
-    res.sendFile(__dirname + '/main.html');
+    res.render(__dirname + '/views/index.ejs');
+});
+
+app.get('/write', function(req, res){
+    res.render(__dirname + '/views/write.ejs');
 });
 
 //get요청으로 list 페이지로 접속하면 실제 db에 저장된 데이터들로 예쁘게 꾸며진 list.html 보여줌
@@ -58,5 +63,26 @@ app.get('/list', function(req,res){
         console.log(result);
         //찾은 db 내용을 ejs 파일에 집어넣어주세요
         res.render('list.ejs', { posts : result });// posts라는 이름으로 결과가 전달된다.
+    });
+});
+
+app.delete('/delete',function(req,res){ //delete라는 경로로 delete 요청이 왔을 때, ~~를 수행해줘~
+    console.log(req.body);// ajax 요청시 서버에 {_id : 1} 이라는 정보도 보내주세요~
+    req.body._id = parseInt(req.body._id); //_id : '1'의 값을 _id : 1로 바꾸어준다.
+    db.collection('post').deleteOne(req.body, function(error, result){//req.body에 담긴 게시물 번호에 따라 db에서 게시물 삭제.
+        console.log('삭제완료'); // 요청한대로 됐을시(삭제 됐을 시), 실행하는 콜백함수
+        res.status(200).send({message : '성공했습니다.'});  //요청을 성공적으로 했다고 응답한다.
+    })
+});
+
+// /detail1으로 접속하면 detail.ejs 보여주고, 
+// /detail/2로 접속하면 detail2.ejs 보여줌
+// /detai/4로 접속하면 detail4.ejs 보여줌 ~~~추가추가
+// 요청마다 페이지를 계속 새로 만들수는 없기 때문에 페이지 하나만 만드는 방법을 구상한거임
+app.get('/detail/:id',function(req, res){ // URL의 파라미터!
+    // db에서 {_id : detail/뒤에있는숫자}인 게시물을 찾아주세요~
+    db.collection('post').findOne({_id :parseInt(req.params.id)}, function(error, result){ //파라미터 중 : id라는 뜻
+        console.log(result);
+        res.render('detail.ejs', { data : result });
     });
 });

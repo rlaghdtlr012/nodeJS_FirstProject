@@ -4,17 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="/public/main.css">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <title>Document</title>
 </head>
 <body>
-    <h4>서버에서 가져온 할 일 리스트</h4>
-    <% for(var i = 0; i < posts.length; i++){ %>
-        <h4>할 일 제목 : <%= posts[i].제목 %><h4>
-        <p>할 일 마감날짜 : <%= posts[i].날짜 %></p>
-        <button>삭제</button>
-    <% } %>
-    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <!-- nav.html을 첨부해주세용. 나는 이자리에 nav.html 박아넣을거임 -->
+    <%- include('nav.html') %>
+    <h4 class = "ml-2 my-3 text-center">서버에서 가져온 할 일 리스트</h4>
+    <div class = "container">
+        <ul class="list-group">
+            <% for (var i = 0; i < posts.length; i++){ %>
+            <li class="list-group-item">
+            <p> 글번호 : <%= posts[i]._id %></p>
+            <h4> 할일 제목 : <%= posts[i].제목 %> </h4>
+            <p> 할일 마감날짜 : <%= posts[i].날짜 %> </p>
+            <button class = "btn btn-danger delete" data-id= "<%= posts[i]._id %>">삭제</button> <!-- data-id 속성에  _id를 숨겨주세요 -->
+            </li>
+            <% } %>
+        </ul>
+    </div>
+
+    <!--ajax란 서버랑 통신을 할 수 있게 도와주는 js 문법
+    ajax의 장점 : 새로고침 없이 서버에 요청하는 걸 도와주는 js 문법
+    -->
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script>
+        
+        $('.delete').click(function(e){ //class가 delete인 버튼을 '클릭하면' 밑에 함수를 실행해줘
+            var 글번호 = e.target.dataset.id; // *****내가 누른 버튼에 숨겨진 data-id 값을 가져와줘****
+            var 지금누른거 = $(this); // this : 지금 이벤트가 동작하는 곳
+            //jQuery 라이브러리 도움을 받은 ajax 요청, ajax 기본 문법
+            $.ajax({
+                method : 'DELETE', // 서버에 새로고침 없이 DELETE 요청을 할 것이다.
+                url : '/delete', // 요청할 경로
+                data : {_id : 글번호} // 지금 내가 클릭한 버튼의 ID값을 지워달라고 요청.요청과 함께 보낼 데이터(요청 보낼 때, 삭제할 게시물 번호를 함께 전송)
+            }).done(function(result){ //요청이 성공하면 요걸 실행해주세요.
+                //페이지를 강제로 새로고침 해주세요 or 삭제버튼을 누른 <li> 요소를 제거해주시요.(기능추가)
+                console.log('성공했어욤');
+                지금누른거.parent('li').fadeOut(); // 지금 누른 것의 부모 태그 중에 'li'를 찾아서 서서히 사라지게 해줘
+            }).fail(function(xhr, textStatus, errorThrown){ //요청이 실패했을 때, 이 함수 실행
+                console.log(xhr, textStatus, errorThrown);
+            });
+        })
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
 </body>
