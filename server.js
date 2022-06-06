@@ -3,6 +3,9 @@ const app = express();
 const bodyParser = require('body-parser');
 app.use(express.urlencoded({extended: true})) 
 const MongoClient = require('mongodb').MongoClient;
+// method-override 라이브러리 사용하겠다고 선언한다.
+const methodOverride = require('method-override');
+app.use(methodOverride('_method'));
 // ejs engine을 쓰겠다고 선언
 app.set('view engine', 'ejs');
 // 나는 static 파일을 보관하기 위해 public 폴더를 쓸거다.
@@ -49,11 +52,19 @@ MongoClient.connect('mongodb+srv://rlaghdtlr012:1q2w3e4r5t!@cluster0.ci2ii.mongo
 
 //메인페이지로 접속하면 main.html 보여줌
 app.get('/', function(req, res){
-    res.render(__dirname + '/views/index.ejs');
+    res.render('index.ejs');
+});
+
+//편집 페이지 접근
+app.get('/edit/:id',function(req, res){
+    db.collection('post').findOne({_id : parseInt(req.params.id)}, function(error, result){
+        console.log(result);
+        res.render('edit.ejs',{ post : result }); // 파라미터 중 :id번 게시물의 제목/날짜 페이지 보여주기
+    })
 });
 
 app.get('/write', function(req, res){
-    res.render(__dirname + '/views/write.ejs');
+    res.render('write.ejs');
 });
 
 //get요청으로 list 페이지로 접속하면 실제 db에 저장된 데이터들로 예쁘게 꾸며진 list.html 보여줌
