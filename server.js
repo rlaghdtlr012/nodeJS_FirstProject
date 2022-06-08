@@ -163,12 +163,23 @@ passport.use(new LocalStrategy({
     })
   });
 
-  //검색한 것 찾게 해주는 코드
-  app.get('/search', (req, res) => {
+//검색한 것 찾게 해주는 코드
+app.get('/search', (req, res) => {
+   var searchCondition = [
+      {  
+        $search: {
+          index: 'titleSearch',
+          text: {
+            query: req.query.value,
+            path: '제목'  // 제목날짜 둘다 찾고 싶으면 ['제목', '날짜']
+          }
+        }
+      },
+      {$sort : {_id : 1}}
+   ]
    console.log(req.query);
-   //정확히 일치하는 것만 찾아줌
-   db.collection('post').find({ 제목 : req.query.value}).toArray((error, result) => {
-       console.log(result);
-       res.render('search.ejs',{ searchResult : result }); //search.ejs 파일에 쉼표 옆에 정보들을 보낼 수 있음
-   })
-  });
+   db.collection('post').aggregate(searchCondition).toArray((error, result) => {
+        console.log(result);
+        res.render('search.ejs',{ searchResult : result }); //search.ejs 파일에 쉼표 옆에 정보들을 보낼 수 있음
+    })
+})
