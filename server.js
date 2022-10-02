@@ -109,7 +109,7 @@ app.use(passport.session());
 
 app.get('/login', function(req, res){
     res.render('login.ejs');
-});
+}); //
 // login을 하면 아이디랑 비번을 검사하고(passport.auth~~이부분. 이거는 로그인 기능을 쉽게 구현하도록 도와주는 라이브러리), 이게 통과가 되면 function을 실행하라.
 app.post('/login', passport.authenticate('local',{
     failureRedirect : '/fail' //로그인 실패하면, /fail 경로로 이동시켜라
