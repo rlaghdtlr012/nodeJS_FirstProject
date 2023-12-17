@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <link href="/main.css" rel="stylesheet" />
+  </head>
+  <body class="grey-bg">
+    <%- include('nav.ejs') %>
+    <input class="search" />
+    <button class="search-send">검색</button>
+    <script>
+      document.querySelector(".search-send").addEventListener("click", () => {
+        fetch("/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            searchTerm: document.querySelector(".search").value,
+          }),
+        });
+      });
+    </script>
+    <h4>검색 결과</h4>
+    <div class="white-bg">
+      <% posts.forEach((post) => { %>
+      <div class="list-box">
+        <h4>
+          <a href="/detail/<%= post._id %>"> <%= post.title %> </a>
+          <a href="/edit/<%= post._id %>">📝</a>
+          <span class="delete" data-id="<%= post._id %>">🗑️</span>
+        </h4>
+        <p><%= post.content %></p>
+      </div>
+      <% }) %>
+      <a href="/list/next/<%= posts[posts.length - 1]._id %>">다음</a>
+    </div>
+    <script type="application/json" src="../navigate.js"></script>
+  </body>
+</html>

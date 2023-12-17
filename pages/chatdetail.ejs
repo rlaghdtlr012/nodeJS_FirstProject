@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <link href="/main.css" rel="stylesheet" />
+  </head>
+  <body class="grey-bg">
+    <%- include('nav.ejs') %> <%= JSON.stringify(result) %>
+    <div class="detail-bg">
+      <div class="chat-screen">
+        <div class="chat-box"><span>안녕하세요</span></div>
+        <div class="chat-box"><span>안녕하세요</span></div>
+        <div class="chat-box mine"><span>안녕하세요</span></div>
+      </div>
+    </div>
+    <div class="chat-form">
+      <input class="chat-input" />
+      <button class="chat-button">전송</button>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io@4.7.2/client-dist/socket.io.min.js"></script>
+    <script>
+      const socket = io();
+      document.querySelector(".chat-button").addEventListener("click", () => {
+        const value = document.querySelector(".chat-input").value;
+        socket.emit("message", { msg: value, room: "<%= result._id %>" });
+      });
+      socket.emit("ask-join", "<%= result._id %>"); // key, value 값으로 데이터 전송. 1번방으로 join 하고 싶다고 메시지 날리기
+      socket.on("broadcast", (data) => {
+        // 서버에서 보낸 데이터 수신 및 메시지 컴포넌트 생성
+        document
+          .querySelector(".chat-screen")
+          .insertAdjacentHTML(
+            "beforeend",
+            `<div class="chat-box"><span>${data}</span></div>`
+          );
+      });
+    </script>
+  </body>
+</html>

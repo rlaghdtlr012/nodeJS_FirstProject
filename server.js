@@ -1,174 +1,352 @@
-const express = require('express');
+const express = require("express");
 const app = express();
-const bodyParser = require('body-parser');
-require('dotenv').config()
-app.use(express.urlencoded({extended: true})) 
-const MongoClient = require('mongodb').MongoClient;
-// method-override 라이브러리 사용하겠다고 선언한다.
-const methodOverride = require('method-override');
-app.use(methodOverride('_method'));
-// ejs engine을 쓰겠다고 선언
-app.set('view engine', 'ejs');
-// 나는 static 파일을 보관하기 위해 public 폴더를 쓸거다.
-app.use('/public', express.static('public'));
+const { MongoClient, ObjectId } = require("mongodb");
+const methodOverride = require("method-override");
+const bcrypt = require("bcrypt");
+const MongoStore = require("connect-mongo");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+const server = createServer(app);
+const io = new Server(server);
+require("dotenv").config();
 
-var db;
-//몽고db로 연결
-MongoClient.connect(process.env.DB_URL,function(error, client){
-    
-    app.listen(8080, function(){
-    console.log("listening to 8080");
-    });
+app.use(methodOverride("_method"));
+app.use(express.static(__dirname + "/public"));
+app.set("view engine", "ejs");
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-    if(error){
-        return console.log(error);
-    }
-    //hongshikDB로 db연결
-    db = client.db('hongshikDB');
+const session = require("express-session");
+const passport = require("passport");
+const LocalStrategy = require("passport-local");
+const connectDB = require("./database.js");
 
-    //post라는 파일에 insertOne{자료}를 저장
-    // db.collection('post').insertOne({이름 : 'Kim', 나이 : 28, _id : 100}, function(error, result){
-    //     console.log('저장완료');
-    // });
-
-    //어떤 사람이 /add 경로로 POST 요청을 하면 데이터 2(제목, 날짜)개를 보내주는데,
-    // 이 때, 'post'라는 이름을 가진 collection에 두 개 데이터를 저장하기.
-    app.post('/add', function(req, res){
-    res.send('전송완료');
-    //counter db에서 name이 게시물갯수 인 것을 찾아서 그것의 totalPost를 console.log에 찍는다
-    db.collection('counter').findOne({name : '게시물갯수'}, function(error, result){
-        console.log(result.totalPost);
-        var totalPostNum = result.totalPost;
-        //글을 발행해주세요.
-        db.collection('post').insertOne({ _id : totalPostNum + 1, 제목 : req.body.title, 날짜 : req.body.date}, function(error, result){
-            console.log('저장완료');
-            //counter라는 콜렉션에 있는 totalPost라는 항목도 1 증가시켜야함(수정);
-            db.collection('counter').updateOne({name : '게시물갯수'},{ $inc : {totalPost:1} },function(error, result){
-                if(error){return console.log(error);}
-            })
-        });
-    });
-})
-});
-
-//메인페이지로 접속하면 main.html 보여줌
-app.get('/', function(req, res){
-    res.render('index.ejs');
-});
-
-//편집 페이지 접근
-app.get('/edit/:id',function(req, res){
-    db.collection('post').findOne({_id : parseInt(req.params.id)}, function(error, result){
-        console.log(result);
-        res.render('edit.ejs',{ post : result }); // 파라미터 중 :id번 게시물의 제목/날짜 페이지 보여주기
-    })
-});
-
-app.get('/write', function(req, res){
-    res.render('write.ejs');
-});
-
-//get요청으로 list 페이지로 접속하면 실제 db에 저장된 데이터들로 예쁘게 꾸며진 list.html 보여줌
-app.get('/list', function(req,res){
-    //db에 저장된 post라는 collection안의 모든 데이터를 꺼내주세요
-    db.collection('post').find().toArray(function(error, result){ // 다 찾아주세요~
-        console.log(result);
-        //찾은 db 내용을 ejs 파일에 집어넣어주세요
-        res.render('list.ejs', { posts : result });// posts라는 이름으로 결과가 전달된다.
-    });
-});
-
-app.delete('/delete',function(req,res){ //delete라는 경로로 delete 요청이 왔을 때, ~~를 수행해줘~
-    console.log(req.body);// ajax 요청시 서버에 {_id : 1} 이라는 정보도 보내주세요~
-    req.body._id = parseInt(req.body._id); //_id : '1'의 값을 _id : 1로 바꾸어준다.
-    db.collection('post').deleteOne(req.body, function(error, result){//req.body에 담긴 게시물 번호에 따라 db에서 게시물 삭제.
-        console.log('삭제완료'); // 요청한대로 됐을시(삭제 됐을 시), 실행하는 콜백함수
-        res.status(200).send({message : '성공했습니다.'});  //요청을 성공적으로 했다고 응답한다.
-    })
-});
-
-// /detail1으로 접속하면 detail.ejs 보여주고, 
-// /detail/2로 접속하면 detail2.ejs 보여줌
-// /detai/4로 접속하면 detail4.ejs 보여줌 ~~~추가추가
-// 요청마다 페이지를 계속 새로 만들수는 없기 때문에 페이지 하나만 만드는 방법을 구상한거임
-app.get('/detail/:id',function(req, res){ // URL의 파라미터!
-    // db에서 {_id : detail/뒤에있는숫자}인 게시물을 찾아주세요~
-    db.collection('post').findOne({_id :parseInt(req.params.id)}, function(error, result){ //파라미터 중 : id라는 뜻
-        console.log(result);
-        res.render('detail.ejs', { data : result });
-    });
-});
-
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const session = require('express-session');
-
-app.use(session({secret : '비밀코드', resave : true, saveUninitialized : false}));
 app.use(passport.initialize());
+app.use(
+  session({
+    secret: process.env.SECRET_KEY,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 60 * 60 * 1000 },
+    store: MongoStore.create({
+      mongoUrl: process.env.DB_URL,
+      dbName: "forum",
+    }),
+  })
+);
+
+let db;
+connectDB
+  .then((client) => {
+    console.log("DB연결성공");
+    db = client.db("forum");
+  })
+  .catch((err) => {
+    console.log(err);
+  });
+
 app.use(passport.session());
 
-app.get('/login', function(req, res){
-    res.render('login.ejs');
-}); //
-// login을 하면 아이디랑 비번을 검사하고(passport.auth~~이부분. 이거는 로그인 기능을 쉽게 구현하도록 도와주는 라이브러리), 이게 통과가 되면 function을 실행하라.
-app.post('/login', passport.authenticate('local',{
-    failureRedirect : '/fail' //로그인 실패하면, /fail 경로로 이동시켜라
-}), function(req, res){
-    res.redirect('/');
+passport.use(
+  new LocalStrategy(async (id, password, cb) => {
+    let result = await db.collection("user").findOne({ username: id });
+    if (!result) {
+      return cb(null, false, { message: "아이디 DB에 없음" });
+    }
+    const loginResult = password === result.password;
+    if (loginResult) {
+      return cb(null, result);
+    } else {
+      return cb(null, false, { message: "비번 불일치" });
+    }
+  })
+);
+
+server.listen(process.env.PORT, () => {
+  console.log(`http://localhost:${process.env.PORT} 에서 서버 실행중`);
 });
 
-// 마이페이지로 요청을 하면, loginYN을 실행해 준 후, 밑에 실행 미들웨어 쓰는 법
-app.get('/mypage', loginYN, function(req, res){
-    console.log(req.user); //deserialize를 이용해서 db에서 찾은 사용자의 이름
-    res.render('mypage.ejs',{사용자 : req.user});
-})
-// 로그인 했는지 안했는지 알려주는(마이페이지 접속 전 실행할) 미들웨어
-function loginYN(req, res, next){
-    if (req.user){ //req.user가 있냐? 로그인 후 세션이 있으면 req.user가 항상 있음
-        next();
-    }else{
-        res.send('로그인 안하셨습니다만?');
-    }
+passport.serializeUser((user, done) => {
+  process.nextTick(() => {
+    done(null, { id: user._id, username: user.username });
+  });
+});
+
+passport.deserializeUser(async (user, done) => {
+  let result = await db
+    .collection("user")
+    .findOne({ _id: new ObjectId(user.id) });
+  delete result.password;
+  process.nextTick(() => {
+    done(null, result);
+  });
+});
+
+function checkLogin(req, res, next) {
+  if (!req.user) {
+    res.send("로그인 하세요");
+  }
+  next();
 }
 
-//아이디 비번 인증하는 세부코드 작성. 인증하는 방법을 Strategy라고 칭함
-passport.use(new LocalStrategy({
-    usernameField: 'id', // form에 id라는 이름을 가지는 것이 변수에 저장(name 속성)
-    passwordField: 'pw', // form에 pw라는 이름을 가지는 것이 변수에 저장(name 속성)
-    session: true, // 이 사람의 로그인 세션을 저장할건지 말건지(이 경우 True)
-    passReqToCallback: false,
-  }, function (입력한아이디, 입력한비번, done) {
-    console.log(입력한아이디, 입력한비번);
-    db.collection('login').findOne({ id: 입력한아이디 }, function (에러, 결과) {
-      if (에러) return done(에러)
-      // 여기 밑에부터 굉장히 중요
-      if (!결과) return done(null, false, { message: '존재하지않는 아이디요' }) // 결과에 아무것도 담겨있지 않을때, message~~를 실행하고
-      if (입력한비번 == 결과.pw) { //결과에 무엇이 담겨 있다면(db에 아이디가 있다면), 입력한 비번과 결과.pw를 비교한다. pw가 암호화 되어있지 않아서 보안이 쑤뤠기임
-        return done(null, 결과) //비번까지 맞으면 done~~
-      } else {  //done(a,b,c) : a:서버에러, b:아이디비번이 다 맞을 경우, 그 정보를 ~~로 보내준다. c: false일 경우, 에러 메시지를 출력한다.
-        return done(null, false, { message: '비번 틀렸어요' })
-      }
-    })
-  }));
+// 여기 밑에있는 모든 API는 checkLogin 미들웨어가 적용된다~.
+// app.use(checkLogin);
+// 특정 url에 대한 미들웨어 적용
+// app.use('/URL', checkLogin);
 
-  // 로그인 성공했을 시, 로그인 세션을 만들고 유지시켜줘야한다. == 유저의 정보를 시리얼화 해서 저장
-  passport.serializeUser(function(user, done){
-    done(null, user.id);
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/index.html");
+});
+
+app.get("/news", (req, res) => {
+  db.collection("post").insertOne({ title: "어쩌구" });
+  res.sendFile(__dirname + "/index.html");
+});
+
+app.get("/list", async (req, res) => {
+  const result = await db.collection("post").find().toArray();
+  res.render(__dirname + "/pages/list.ejs", { posts: result });
+});
+
+app.get("/time", (req, res) => {
+  res.render(__dirname + "/pages/time.ejs", { nowDate: new Date() });
+});
+
+app.get("/write", (req, res) => {
+  res.render(__dirname + "/pages/write.ejs");
+});
+
+app.get("/login", (req, res) => {
+  res.render(__dirname + "/pages/login.ejs");
+});
+
+app.post("/login", async (req, res, next) => {
+  passport.authenticate("local", (error, user, info) => {
+    if (error) return res.status(500).json(error);
+    if (!user) return res.status(401).json(info.message);
+    req.logIn(user, (err) => {
+      if (err) return next(err);
+      res.redirect("/");
+    });
+  })(req, res, next);
+});
+
+app.get("/register", (req, res) => {
+  res.render(__dirname + "/pages/register.ejs");
+});
+
+app.post("/register", async (req, res) => {
+  // bcrypt.hash("암호화할 문자", 얼마나 꼬을건지)
+  let hashedPassword = await bcrypt.hash(req.body.password, 10);
+  await db
+    .collection("user")
+    .insertOne({ username: req.body.username, password: hashedPassword });
+  res.redirect("/");
+});
+
+app.post("/add", async (req, res) => {
+  try {
+    if (!req.body.title) {
+      res.send("님 제목 입력 안함");
+    } else {
+      await db.collection("post").insertOne({
+        title: req.body.title,
+        content: req.body.content,
+        user: req.user._id,
+        username: req.user.username,
+      });
+      res.redirect("/list");
+    }
+  } catch (e) {
+    console.log(e);
+    res.status(500).send("서버에러");
+  }
+});
+
+app.get("/detail/:id", async (req, res) => {
+  try {
+    const result = await db
+      .collection("post")
+      .findOne({ _id: new ObjectId(req.params.id) });
+    const comment = await db
+      .collection("comment")
+      .find({
+        parentId: new ObjectId(req.params.id),
+      })
+      .toArray();
+    res.render(__dirname + "/pages/detail.ejs", {
+      result: result,
+      comment: comment,
+    });
+  } catch (e) {
+    console.log(e);
+    res.status(404).send("이상한 url 입력함");
+  }
+});
+
+app.get("/edit/:id", async (req, res) => {
+  let result = await db
+    .collection("post")
+    .findOne({ _id: new ObjectId(req.params.id) });
+  res.render(__dirname + "/pages/edit.ejs", { result: result });
+});
+
+app.post("/edit/:id", async (req, res) => {
+  await db
+    .collection("post")
+    .updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { title: req.body.title, content: req.body.content } }
+    );
+
+  res.redirect("/list");
+});
+
+app.post("/delete", async (req, res) => {
+  await db.collection("post").deleteOne({
+    _id: new ObjectId(req.body.id),
+    user: new ObjectId(req.user._id),
   });
-  // 이 세션 데이터를 가진 사람을 db에서 찾아주세요(마이페이지 접속시 발동)
-  passport.deserializeUser(function(아이디, done){
-    //db에서 위에 있는 user.id로 유저를 찾은 뒤에 유저 정보를 밑에 null, 뒤에 넣음
-    db.collection('login').findOne({id : 아이디}, function(req, res){
-        done(null, res);
+  res.send("삭제완료");
+});
+
+/**
+ * 아래 :id를 사용한 api로 성능 대체
+ */
+// app.get("/list/1", async (req, res) => {
+//   let posts = await db.collection("post").find().limit(5).toArray();
+//   res.render(__dirname + "/pages/list.ejs", { posts: posts });
+// });
+
+// app.get("/list/2", async (req, res) => {
+//   let posts = await db.collection("post").find().skip(5).limit(5).toArray();
+//   res.render(__dirname + "/pages/list.ejs", { posts: posts });
+// });
+
+// app.get("/list/3", async (req, res) => {
+//   let posts = await db.collection("post").find().skip(10).limit(5).toArray();
+//   res.render(__dirname + "/pages/list.ejs", { posts: posts });
+// });
+
+app.get("/list/:id", async (req, res) => {
+  let posts = await db
+    .collection("post")
+    .find()
+    .skip((req.params.id - 1) * 5)
+    .limit(5)
+    .toArray();
+  res.render(__dirname + "/pages/list.ejs", { posts: posts });
+});
+
+app.get("/list/next/:id", async (req, res) => {
+  let posts = await db
+    .collection("post")
+    .find({ _id: { $gt: new ObjectId(req.params.id) } })
+    .limit(5)
+    .toArray();
+  res.render(__dirname + "/pages/list.ejs", { posts: posts });
+});
+
+app.use("/shop", require("./routes/shop.js"));
+
+// index를 사용한 검색
+// app.get("/search", async (req, res) => {
+//   const posts = await db
+//     .collection("post")
+//     .find({ $text: { $search: req.query.val } }) // text 인덱스에서 req.query.val을 찾아줘
+//     .toArray(); // 문자를 인덱스로 만들 경우, 띄어쓰기 단위로 인덱스를 만드는데, 한국어는 조사가 많이 들어가므로
+//   // 인덱스를 만들 때, 웬만하면 숫자로 된 document를 인덱스로 만드는 것이 좋다.
+//   res.render(__dirname + "/pages/search.ejs", { posts: posts });
+//   console.log(posts);
+// });
+
+// search_index를 사용한 검색
+app.get("/search", async (req, res) => {
+  const searchCondition = [
+    {
+      $search: {
+        index: "title_index",
+        text: { query: req.query.val, path: "title" },
+      },
+    },
+    {
+      $sort: { _id: 1 }, // id 순으로 오름차순 정렬
+    },
+  ];
+  const posts = await db
+    .collection("post")
+    .aggregate(searchCondition)
+    .toArray();
+  res.render(__dirname + "/pages/search.ejs", { posts: posts });
+  console.log(posts);
+});
+
+app.post("/comment", async (req, res) => {
+  await db
+    .collection("comment")
+    .insertOne({
+      content: req.body.content,
+      writeId: new ObjectId(req.user._id),
+      writer: req.user.username,
+      parentId: new ObjectId(req.body.parentId),
     })
+    .then(res.redirect("back"))
+    .catch((err) => {
+      console.error(err);
+    });
+});
+
+app.get("/chat/request", async (req, res) => {
+  await db.collection("chatroom").insertOne({
+    member: [req.user._id, new ObjectId(req.query.writerId)],
+    date: new Date(),
+  });
+  res.redirect("/chat/list");
+});
+
+app.get("/chat/list", async (req, res) => {
+  const result = await db
+    .collection("chatroom")
+    .find({
+      member: req.user._id,
+    })
+    .toArray();
+  res.render(__dirname + "/pages/chatList.ejs", { result: result });
+});
+
+app.get("/chat/detail/:id", async (req, res) => {
+  const result = await db
+    .collection("chatroom")
+    .findOne({ _id: new ObjectId(req.params.id) });
+  res.render(__dirname + "/pages/chatdetail.ejs", { result: result });
+});
+
+// Server Sent Event(Server -> Client로 일방적으로 정보 전달) 응답을 보낼 때, header 정보 설정
+app.get("/stream/list", (req, res) => {
+  res.writeHead(200, {
+    Connection: "keep-alive",
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+  });
+  setInterval(() => {
+    // write 할 때, 템플릿 반드시 맞춰야함
+    res.write("event: msg\n");
+    res.write('data: {"a": "b"}\n\n');
+  }, 2000);
+});
+io.on("connection", (socket) => {
+  socket.on("age", (data) => {
+    // 유저가 보낸 정보 key: value로 받아서 data에 저장
+    console.log("유저가 보낸거 : ", data);
+    io.emit("name", "kim"); // 받고나서 유저한테 다시 데이터 보냄
   });
 
-  //검색한 것 찾게 해주는 코드
-  app.get('/search', (req, res) => {
-   console.log(req.query);
-   //정확히 일치하는 것만 찾아줌
-   db.collection('post').find({ 제목 : req.query.value}).toArray((error, result) => {
-       console.log(result);
-       res.render('search.ejs',{ searchResult : result }); //search.ejs 파일에 쉼표 옆에 정보들을 보낼 수 있음
-   })
+  socket.on("ask-join", (data) => {
+    // 유저를 특정 방으로 넣는 로직. 참고로 이 기능은 서버만 가능
+    socket.join(data);
   });
+
+  socket.on("message", (data) => {
+    io.to(data.room).emit("broadcast", data.msg);
+  });
+});
